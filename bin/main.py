@@ -5,9 +5,10 @@ import locale
 import os
 import re
 import sys
+import subprocess
 
-# replace with the actual path to the bing-desktop-wallpaper-changer folder
-path_to_Bing_Wallpapers="/path/to/bing-desktop-wallpaper-changer"
+# Replaced to /opt/bing-desktop-wallpaper-changer by Bing-Desktop-Wallpaper-Changer Installer (Version 2.0)
+path_to_Bing_Wallpapers="/opt/bing-desktop-wallpaper-changer"
 
 # wait computer internet connection
 os.system("sleep 10")
@@ -125,7 +126,10 @@ def change_background(filename):
 def get_current_background_uri():
     gsettings = Gio.Settings.new('org.gnome.desktop.background')
     path = gsettings.get_string('picture-uri')
-    return path[6:]
+    if os.path.exists(path):
+        return path[6:]
+    else:
+        return '/dev/zero'
 
 
 def change_screensaver(filename):
@@ -346,6 +350,37 @@ def check_limit():
         del files[0]
 
 
+def overlay_text_on_image(image_name, text, font='helvetica',
+                          font_size=24, fill_color='white'):
+    """Add the image text as overlay over the image.
+
+    NOTE: Depends on Imagemagick (http://www.imagemagick.org/)
+
+    Returns
+    -------
+    tuple: (bool, str)
+        (success, full image name for updated image)
+    """
+    # Remove unnecessary text in brackets
+    cmd_str = "convert -font %s -fill %s -pointsize %d" % \
+              (font, fill_color, font_size)
+    cmd_list = cmd_str.split(' ')
+    if text.find('(') != -1:
+        text = text.rpartition('(')[0]
+    draw_param = '''-draw 'text 50,50 "%s"' ''' % text
+    cmd_list.append(draw_param)
+    cmd_list.append('-gravity South')
+    cmd_list.append(image_name)
+    overlay_image_name = image_name.strip('.jpg') + '-txt.jpg'
+    cmd_list.append(overlay_image_name)
+    # TA: Struggling to get this working with subprocess. The
+    #     text description part with its nested quotes keep
+    #     failing so opting for less secure os.system
+    #subprocess.check_output(cmd_list)
+    ret = os.system(' '.join(cmd_list))
+    return (ret==0, overlay_image_name)
+
+
 def main():
     """
     Main application entry point.
@@ -365,14 +400,16 @@ def main():
         
         if not os.path.isfile(image_path):
             urlretrieve(image_url, image_path)
-            change_background(image_path)
-            change_screensaver(image_path)
-            summary = 'Bing Wallpaper updated successfully'
             body = image_metadata.find("copyright").text.encode('utf-8')
-
             text = str(image_name) + " -- " + str(body) + "\n"
             with open(download_path + "/image-details.txt", "a+") as myfile:
                 myfile.write(text)
+            ok, new_image_path = overlay_text_on_image(image_path, str(body))
+            if ok:
+                image_path = new_image_path
+            change_background(image_path)
+            change_screensaver(image_path)
+            summary = 'Bing Wallpaper updated successfully'
         
         elif os.path.samefile(get_current_background_uri(), image_path):
             summary = 'Bing Wallpaper unchanged'

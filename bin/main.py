@@ -385,6 +385,8 @@ def main():
     """
     Main application entry point.
     """
+    reload(sys)
+    sys.setdefaultencoding('utf8')
     app_name = 'Bing Desktop Wallpaper'
     Notify.init(app_name)
     exit_status = 0
